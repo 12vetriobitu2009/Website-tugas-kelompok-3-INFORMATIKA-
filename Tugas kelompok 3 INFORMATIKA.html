@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dokumen Saya</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#38bdf8; }
+    *{box-sizing:border-box}
+    body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif; background:linear-gradient(160deg,#0b1220,#0f172a 60%); color:var(--text)}
+    header{padding:20px; text-align:center; border-bottom:1px solid rgba(255,255,255,.06); position:sticky; top:0; backdrop-filter:saturate(150%) blur(6px); background:rgba(15,23,42,.6)}
+    h1{margin:0; font-weight:700; letter-spacing:.3px}
+    main{max-width:1100px; margin:20px auto; padding:0 16px 40px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.1); border-radius:18px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .row{display:grid; grid-template-columns:1fr; gap:16px}
+    @media(min-width:900px){ .row{grid-template-columns:340px 1fr} }
+    .uploader{border:2px dashed rgba(148,163,184,.45); border-radius:16px; padding:16px; text-align:center; transition:.2s}
+    .uploader.drag{border-color:var(--accent); background:rgba(56,189,248,.08)}
+    .uploader input{display:none}
+    .btn{display:inline-block; padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.12); color:var(--text); cursor:pointer; text-decoration:none}
+    .btn:hover{border-color:var(--accent)}
+    .muted{color:var(--muted); font-size:.92rem}
+    .viewer{height:72vh; border:1px solid rgba(255,255,255,.1); border-radius:16px; overflow:hidden; background:#0b1020}
+    iframe, embed{width:100%; height:100%; border:0; background:#0b1020}
+    pre{white-space:pre-wrap; word-break:break-word; margin:0; padding:16px; height:100%; overflow:auto}
+    .tip{font-size:.92rem; margin-top:10px; color:var(--muted)}
+    .pill{display:inline-block; font-size:.8rem; padding:4px 8px; margin:2px; border:1px solid rgba(255,255,255,.15); border-radius:999px}
+    footer{opacity:.7; text-align:center; margin-top:22px}
+    a{color:var(--accent)}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📄 Website Dokumen</h1>
+    <div class="muted">Tampilkan file PDF/TXT/MD secara langsung di browser. Untuk DOCX gunakan Google Docs Viewer.</div>
+  </header>
+
+  <main class="row">
+    <section class="card">
+      <h2 style="margin-top:6px">1) Unggah / Tarik File</h2>
+      <label class="uploader" id="dropzone">
+        <input id="fileInput" type="file" accept=".pdf,.txt,.md,.docx,.rtf" />
+        <p style="font-size:1.05rem">Seret & letakkan file ke sini<br/><span class="muted">atau</span></p>
+        <button class="btn" type="button" onclick="document.getElementById('fileInput').click()">Pilih File…</button>
+        <p class="tip">Didukung: <span class="pill">PDF</span> <span class="pill">TXT</span> <span class="pill">MD</span> <span class="pill">DOCX (via viewer)</span></p>
+      </label>
+
+      <h2 style="margin:20px 0 8px">2) Atau muat dari URL</h2>
+      <form id="urlForm" onsubmit="loadFromUrl(event)" autocomplete="off">
+        <input id="urlInput" type="url" placeholder="https://contoh.com/dokumen.pdf" style="width:100%; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.05); color:var(--text)" />
+        <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
+          <button class="btn" type="submit">Muat</button>
+          <a class="btn" href="?file=dokumen.pdf">Contoh: ?file=dokumen.pdf</a>
+        </div>
+      </form>
+
+      <p class="tip">Jika file Anda berada di folder yang sama dengan halaman ini, berikan nama pada query <code>?file=nama-file.pdf</code>.</p>
+
+      <h2 style="margin:20px 0 8px">3) Petunjuk Singkat</h2>
+      <ul class="muted">
+        <li>Letakkan file <b>dokumen.pdf</b> di folder yang sama ➜ akan otomatis dimuat (atau gunakan <code>?file=</code>).</li>
+        <li><b>DOCX</b> tidak didukung langsung oleh browser. Gunakan Google Docs Viewer dengan menaruh file Anda online lalu masukkan URL-nya.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2 style="margin-top:6px">Pratinjau</h2>
+      <div id="viewer" class="viewer">
+        <div style="height:100%; display:grid; place-items:center; text-align:center; padding:20px" id="placeholder">
+          <div>
+            <div style="font-size:1.1rem; margin-bottom:6px">Belum ada file dipilih</div>
+            <div class="muted">Unggah file atau gunakan URL/parameter <code>?file=</code> untuk menampilkan dokumen di sini.</div>
+          </div>
+        </div>
+      </div>
+      <div class="tip">Jenis yang dideteksi: <span id="detected">-</span></div>
+    </section>
+  </main>
+
+  <footer class="muted">© <span id="year"></span> Website Dokumen — dibuat sederhana.</footer>
+
+  <script>
+    const viewer = document.getElementById('viewer');
+    const detected = document.getElementById('detected');
+    const placeholder = document.getElementById('placeholder');
+    const yearEl = document.getElementById('year');
+    yearEl.textContent = new Date().getFullYear();
+
+    function setDetected(text){ detected.textContent = text; }
+
+    function clearViewer(){ viewer.innerHTML=''; }
+
+    function showPlaceholder(){
+      viewer.innerHTML = '';
+      viewer.appendChild(placeholder);
+    }
+
+    function extFromName(name){
+      const m = /\.([a-zA-Z0-9]+)$/.exec(name||'');
+      return m? m[1].toLowerCase(): '';
+    }
+
+    function renderPDF(src){
+      clearViewer();
+      const iframe = document.createElement('iframe');
+      iframe.allow = 'autoplay';
+      iframe.src = src;
+      viewer.appendChild(iframe);
+      setDetected('PDF');
+    }
+
+    function renderText(text){
+      clearViewer();
+      const pre = document.createElement('pre');
+      pre.textContent = text;
+      viewer.appendChild(pre);
+      setDetected('Teks (TXT/MD)');
+    }
+
+    function renderDocx(url){
+      clearViewer();
+      const info = document.createElement('div');
+      info.style.padding = '16px';
+      info.innerHTML = `
+        <h3>DOCX terdeteksi</h3>
+        <p class="muted">Browser tidak bisa merender DOCX secara langsung. Anda bisa:</p>
+        <ol>
+          <li>Mengonversi ke PDF lalu muat di sini, atau</li>
+          <li>Menggunakan Google Docs Viewer:</li>
+        </ol>
+        <p><a class="btn" target="_blank" rel="noopener" href="https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}">Buka di Google Docs Viewer</a></p>`;
+      viewer.appendChild(info);
+      setDetected('DOCX');
+    }
+
+    async function handleFile(file){
+      const name = file.name || 'file';
+      const ext = extFromName(name);
+      const blobUrl = URL.createObjectURL(file);
+      if(ext === 'pdf'){
+        renderPDF(blobUrl);
+      } else if(ext === 'txt' || ext === 'md'){ 
+        const text = await file.text();
+        renderText(text);
+      } else if(ext === 'docx' || ext === 'rtf'){
+        renderDocx(blobUrl);
+      } else {
+        setDetected('Tidak dikenal');
+        renderText('Tidak dapat merender file ini. Coba unggah PDF/TXT/MD.');
+      }
+    }
+
+    // File input
+    const input = document.getElementById('fileInput');
+    input.addEventListener('change', () => {
+      const f = input.files?.[0];
+      if(f) handleFile(f);
+    });
+
+    // Drag & Drop
+    const drop = document.getElementById('dropzone');
+    ;['dragenter','dragover'].forEach(evt => drop.addEventListener(evt, e=>{e.preventDefault(); drop.classList.add('drag')}));
+    ;['dragleave','drop'].forEach(evt => drop.addEventListener(evt, e=>{e.preventDefault(); drop.classList.remove('drag')}));
+    drop.addEventListener('drop', e => {
+      const f = e.dataTransfer.files?.[0];
+      if(f) handleFile(f);
+    });
+
+    // Load from URL form
+    function loadFromUrl(e){
+      e.preventDefault();
+      const url = document.getElementById('urlInput').value.trim();
+      if(!url) return;
+      loadByUrl(url);
+    }
+    window.loadFromUrl = loadFromUrl;
+
+    async function loadByUrl(url){
+      const ext = extFromName(url.split('?')[0]);
+      if(ext === 'pdf'){
+        renderPDF(url);
+      } else if(ext === 'txt' || ext === 'md'){
+        try{
+          const res = await fetch(url);
+          const text = await res.text();
+          renderText(text);
+        } catch(err){
+          renderText('Gagal memuat teks dari URL tersebut.');
+        }
+      } else if(ext === 'docx' || ext === 'rtf'){
+        renderDocx(url);
+      } else {
+        renderText('Ekstensi tidak dikenali. Tambahkan ?file=nama.pdf pada URL atau unggah file.');
+      }
+    }
+
+    // Auto-load via ?file=
+    const params = new URLSearchParams(location.search);
+    const fileParam = params.get('file');
+    // Default yang kamu minta (link Google Sites pengguna)
+    const defaultUrl = 'https://sites.google.com/view/tugaskelompok3informatika/halaman-muka';
+    // Jika ada parameter ?file= gunakan itu, jika tidak gunakan defaultUrl untuk memuat halamanmu
+    if(fileParam){
+      loadByUrl(fileParam);
+    } else {
+      // Isi input URL dengan default supaya user tahu sumbernya
+      const urlInputEl = document.getElementById('urlInput');
+      if(urlInputEl) urlInputEl.value = defaultUrl;
+      // Coba muat URL default
+      loadByUrl(defaultUrl);
+    }
+
+</script>
+</body>
+</html>
